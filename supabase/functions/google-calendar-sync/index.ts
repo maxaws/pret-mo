@@ -114,7 +114,9 @@ Deno.serve(async (req: Request) => {
       });
 
       if (!response.ok) {
-        throw new Error('Erreur lors de la récupération des événements');
+        const errorText = await response.text();
+        console.error('Erreur API Google Calendar:', response.status, errorText);
+        throw new Error(`Erreur API Google (${response.status}): ${errorText}`);
       }
 
       const data = await response.json();
