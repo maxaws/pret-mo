@@ -5,6 +5,7 @@ import { Planning, supabase } from '../lib/supabase';
 interface CalendarViewProps {
   planning: Planning[];
   onExportToGoogleCalendar: (planningItem: Planning) => void;
+  showGoogleCalendar?: boolean;
 }
 
 interface GoogleCalendarEvent {
@@ -21,7 +22,7 @@ interface GoogleCalendarEvent {
   };
 }
 
-export const CalendarView: React.FC<CalendarViewProps> = ({ planning, onExportToGoogleCalendar }) => {
+export const CalendarView: React.FC<CalendarViewProps> = ({ planning, onExportToGoogleCalendar, showGoogleCalendar = true }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [googleEvents, setGoogleEvents] = useState<GoogleCalendarEvent[]>([]);
   const [isLoadingGoogleEvents, setIsLoadingGoogleEvents] = useState(false);
@@ -89,8 +90,10 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ planning, onExportTo
   };
 
   useEffect(() => {
-    fetchGoogleCalendarEvents();
-  }, [currentDate]);
+    if (showGoogleCalendar) {
+      fetchGoogleCalendarEvents();
+    }
+  }, [currentDate, showGoogleCalendar]);
 
   const getPlanningForDate = (date: Date) => {
     const dateStr = date.toISOString().split('T')[0];
@@ -153,14 +156,16 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ planning, onExportTo
           >
             Aujourd'hui
           </button>
-          <button
-            onClick={fetchGoogleCalendarEvents}
-            disabled={isLoadingGoogleEvents}
-            className="px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center space-x-2"
-          >
-            <RefreshCw className={`h-4 w-4 ${isLoadingGoogleEvents ? 'animate-spin' : ''}`} />
-            <span>Synchroniser</span>
-          </button>
+          {showGoogleCalendar && (
+            <button
+              onClick={fetchGoogleCalendarEvents}
+              disabled={isLoadingGoogleEvents}
+              className="px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center space-x-2"
+            >
+              <RefreshCw className={`h-4 w-4 ${isLoadingGoogleEvents ? 'animate-spin' : ''}`} />
+              <span>Synchroniser</span>
+            </button>
+          )}
         </div>
 
         <button
@@ -171,7 +176,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ planning, onExportTo
         </button>
       </div>
 
-      {googleCalendarError && (
+      {showGoogleCalendar && googleCalendarError && (
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
           <div className="flex items-start">
             <div className="flex-1">
@@ -185,7 +190,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ planning, onExportTo
         </div>
       )}
 
-      {!googleCalendarError && googleEvents.length > 0 && (
+      {showGoogleCalendar && !googleCalendarError && googleEvents.length > 0 && (
         <div className="bg-green-50 border border-green-200 rounded-lg p-4">
           <p className="text-sm text-green-800">
             {googleEvents.length} événement(s) Google Calendar chargé(s)
@@ -231,7 +236,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ planning, onExportTo
                   return hour >= startHour && hour < endHour;
                 });
 
-                const dayGoogleEvents = getGoogleEventsForDate(date);
+                const dayGoogleEvents = showGoogleCalendar ? getGoogleEventsForDate(date) : [];
                 const hourGoogleEvents = dayGoogleEvents.filter(event => {
                   const startTime = new Date(event.start.dateTime || event.start.date!);
                   const endTime = new Date(event.end.dateTime || event.end.date!);
@@ -264,13 +269,15 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ planning, onExportTo
                                   École d'accueil
                                 </div>
                               </div>
-                              <button
-                                onClick={() => onExportToGoogleCalendar(p)}
-                                className="opacity-0 group-hover:opacity-100 transition-opacity ml-2"
-                                title="Ajouter à Google Agenda"
-                              >
-                                <CalendarIcon className="h-4 w-4 text-green-700" />
-                              </button>
+                              {showGoogleCalendar && (
+                                <button
+                                  onClick={() => onExportToGoogleCalendar(p)}
+                                  className="opacity-0 group-hover:opacity-100 transition-opacity ml-2"
+                                  title="Ajouter à Google Agenda"
+                                >
+                                  <CalendarIcon className="h-4 w-4 text-green-700" />
+                                </button>
+                              )}
                             </div>
                           </div>
                         );

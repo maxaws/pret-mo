@@ -345,6 +345,7 @@ export const Planning: React.FC = () => {
         <CalendarView
           planning={planning}
           onExportToGoogleCalendar={exportToGoogleCalendar}
+          showGoogleCalendar={profile?.role === 'salarie'}
         />
       ) : (
         <div className="bg-white rounded-lg shadow overflow-hidden">
