@@ -36,15 +36,14 @@ Deno.serve(async (req: Request) => {
       throw new Error('Authentification requise');
     }
 
-    const token = authHeader.replace('Bearer ', '');
     const supabaseClient = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, {
       global: {
         headers: { Authorization: authHeader },
       },
     });
 
-    const { data: { user: currentUser }, error: authError } = await supabaseClient.auth.getUser(token);
-    
+    const { data: { user: currentUser }, error: authError } = await supabaseClient.auth.getUser();
+
     if (authError || !currentUser) {
       throw new Error('Utilisateur non authentifié');
     }
