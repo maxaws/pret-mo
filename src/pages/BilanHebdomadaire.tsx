@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { Calendar, Save, Plus, Edit2, Trash2, AlertTriangle, Lock, CheckCircle, XCircle, FileDown } from 'lucide-react';
 import { exportBilanHebdoPDF } from '../utils/pdfExport';
+import { sendEmail, emailTemplates } from '../utils/emailService';
 
 interface BilanHebdo {
   id: string;
@@ -180,7 +181,28 @@ export const BilanHebdomadaire: React.FC = () => {
           });
 
         if (error) throw error;
-        setMessage({ type: 'success', text: 'Bilan créé avec succès' });
+
+        const { data: accueilProfiles } = await supabase
+          .from('profiles')
+          .select('email')
+          .eq('role', 'accueil');
+
+        if (accueilProfiles && accueilProfiles.length > 0 && profile) {
+          const emailTemplate = emailTemplates.bilanSubmitted(
+            `${profile.prenom} ${profile.nom}`,
+            formatDate(formData.semaine_debut),
+            formatDate(formData.semaine_fin)
+          );
+
+          const accueilEmails = accueilProfiles.map(p => p.email);
+
+          await sendEmail({
+            to: accueilEmails,
+            ...emailTemplate,
+          });
+        }
+
+        setMessage({ type: 'success', text: 'Bilan créé avec succès. Les responsables ont été notifiés.' });
       }
 
       setShowForm(false);

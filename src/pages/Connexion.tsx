@@ -45,15 +45,25 @@ export const Connexion: React.FC = () => {
     setLoading(true);
 
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
-        redirectTo: `${window.location.origin}/connexion`,
+      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/reset-password`;
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email: resetEmail }),
       });
 
-      if (error) throw error;
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Erreur lors de l\'envoi de l\'email');
+      }
 
       setResetMessage({
         type: 'success',
-        text: 'Un email de réinitialisation a été envoyé à votre adresse.'
+        text: 'Un email de réinitialisation a été envoyé à votre adresse. Vérifiez votre boîte de réception.'
       });
       setResetEmail('');
     } catch (err: any) {

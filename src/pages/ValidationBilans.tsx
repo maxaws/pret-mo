@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { Calendar, CheckCircle, XCircle, AlertTriangle, User, MessageSquare } from 'lucide-react';
+import { sendEmail, emailTemplates } from '../utils/emailService';
 
 interface BilanHebdo {
   id: string;
@@ -134,9 +135,42 @@ export const ValidationBilans: React.FC = () => {
 
       if (error) throw error;
 
+      const bilan = bilans.find(b => b.id === bilanId);
+      if (bilan) {
+        const validatedBy = `${profile.prenom} ${profile.nom}`;
+        const weekStart = formatDate(bilan.semaine_debut);
+        const weekEnd = formatDate(bilan.semaine_fin);
+
+        if (action === 'valide') {
+          const emailTemplate = emailTemplates.bilanValidated(
+            `${bilan.profiles.prenom} ${bilan.profiles.nom}`,
+            weekStart,
+            weekEnd,
+            validatedBy
+          );
+
+          await sendEmail({
+            to: bilan.profiles.email,
+            ...emailTemplate,
+          });
+        } else if (action === 'refuse' && commentaire) {
+          const emailTemplate = emailTemplates.bilanRejected(
+            `${bilan.profiles.prenom} ${bilan.profiles.nom}`,
+            weekStart,
+            weekEnd,
+            commentaire
+          );
+
+          await sendEmail({
+            to: bilan.profiles.email,
+            ...emailTemplate,
+          });
+        }
+      }
+
       setMessage({
         type: 'success',
-        text: `Bilan ${action === 'valide' ? 'validé' : 'refusé'} avec succès`
+        text: `Bilan ${action === 'valide' ? 'validé' : 'refusé'} avec succès. Email envoyé au salarié.`
       });
       setSelectedBilan(null);
       setCommentaire('');
