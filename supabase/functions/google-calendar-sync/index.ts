@@ -54,15 +54,18 @@ Deno.serve(async (req: Request) => {
     });
 
     const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token);
-    
+
     if (authError || !user) {
       throw new Error('Utilisateur non authentifié');
     }
 
+    const url = new URL(req.url);
+    const targetUserId = url.searchParams.get('userId') || user.id;
+
     const { data: profile } = await supabaseClient
       .from('profiles')
       .select('google_access_token, google_refresh_token, google_token_expiry, google_calendar_sync_enabled')
-      .eq('id', user.id)
+      .eq('id', targetUserId)
       .single();
 
     if (!profile?.google_calendar_sync_enabled || !profile.google_access_token) {
@@ -88,10 +91,9 @@ Deno.serve(async (req: Request) => {
           google_access_token: accessToken,
           google_token_expiry: expiryDate.toISOString(),
         })
-        .eq('id', user.id);
+        .eq('id', targetUserId);
     }
 
-    const url = new URL(req.url);
     const action = url.searchParams.get('action');
 
     if (action === 'fetch-events') {

@@ -5,7 +5,7 @@ import { Planning, supabase } from '../lib/supabase';
 interface CalendarViewProps {
   planning: Planning[];
   onExportToGoogleCalendar: (planningItem: Planning) => void;
-  showGoogleCalendar?: boolean;
+  salarieId?: string | null;
 }
 
 interface GoogleCalendarEvent {
@@ -22,7 +22,7 @@ interface GoogleCalendarEvent {
   };
 }
 
-export const CalendarView: React.FC<CalendarViewProps> = ({ planning, onExportToGoogleCalendar, showGoogleCalendar = true }) => {
+export const CalendarView: React.FC<CalendarViewProps> = ({ planning, onExportToGoogleCalendar, salarieId }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [googleEvents, setGoogleEvents] = useState<GoogleCalendarEvent[]>([]);
   const [isLoadingGoogleEvents, setIsLoadingGoogleEvents] = useState(false);
@@ -62,8 +62,9 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ planning, onExportTo
       weekEnd.setHours(23, 59, 59);
 
       const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/google-calendar-sync`;
+      const userIdParam = salarieId ? `&userId=${salarieId}` : '';
       const response = await fetch(
-        `${apiUrl}?action=fetch-events&timeMin=${weekStart.toISOString()}&timeMax=${weekEnd.toISOString()}`,
+        `${apiUrl}?action=fetch-events&timeMin=${weekStart.toISOString()}&timeMax=${weekEnd.toISOString()}${userIdParam}`,
         {
           headers: {
             'Authorization': `Bearer ${session.access_token}`,
@@ -90,10 +91,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ planning, onExportTo
   };
 
   useEffect(() => {
-    if (showGoogleCalendar) {
-      fetchGoogleCalendarEvents();
-    }
-  }, [currentDate, showGoogleCalendar]);
+    fetchGoogleCalendarEvents();
+  }, [currentDate, salarieId]);
 
   const getPlanningForDate = (date: Date) => {
     const dateStr = date.toISOString().split('T')[0];
@@ -156,16 +155,14 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ planning, onExportTo
           >
             Aujourd'hui
           </button>
-          {showGoogleCalendar && (
-            <button
-              onClick={fetchGoogleCalendarEvents}
-              disabled={isLoadingGoogleEvents}
-              className="px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center space-x-2"
-            >
-              <RefreshCw className={`h-4 w-4 ${isLoadingGoogleEvents ? 'animate-spin' : ''}`} />
-              <span>Synchroniser</span>
-            </button>
-          )}
+          <button
+            onClick={fetchGoogleCalendarEvents}
+            disabled={isLoadingGoogleEvents}
+            className="px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center space-x-2"
+          >
+            <RefreshCw className={`h-4 w-4 ${isLoadingGoogleEvents ? 'animate-spin' : ''}`} />
+            <span>Synchroniser</span>
+          </button>
         </div>
 
         <button
@@ -176,21 +173,21 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ planning, onExportTo
         </button>
       </div>
 
-      {showGoogleCalendar && googleCalendarError && (
+      {googleCalendarError && (
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
           <div className="flex items-start">
             <div className="flex-1">
               <h3 className="text-sm font-medium text-yellow-800">Google Calendar non connecté</h3>
               <p className="mt-1 text-sm text-yellow-700">{googleCalendarError}</p>
               <p className="mt-2 text-sm text-yellow-600">
-                Allez dans Paramètres pour connecter votre compte Google Calendar
+                {salarieId ? 'Ce salarié doit connecter son compte Google Calendar dans les Paramètres' : 'Allez dans Paramètres pour connecter votre compte Google Calendar'}
               </p>
             </div>
           </div>
         </div>
       )}
 
-      {showGoogleCalendar && !googleCalendarError && googleEvents.length > 0 && (
+      {!googleCalendarError && googleEvents.length > 0 && (
         <div className="bg-green-50 border border-green-200 rounded-lg p-4">
           <p className="text-sm text-green-800">
             {googleEvents.length} événement(s) Google Calendar chargé(s)
@@ -236,7 +233,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ planning, onExportTo
                   return hour >= startHour && hour < endHour;
                 });
 
-                const dayGoogleEvents = showGoogleCalendar ? getGoogleEventsForDate(date) : [];
+                const dayGoogleEvents = getGoogleEventsForDate(date);
                 const hourGoogleEvents = dayGoogleEvents.filter(event => {
                   const startTime = new Date(event.start.dateTime || event.start.date!);
                   const endTime = new Date(event.end.dateTime || event.end.date!);
@@ -269,7 +266,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ planning, onExportTo
                                   École d'accueil
                                 </div>
                               </div>
-                              {showGoogleCalendar && (
+                              {!salarieId && (
                                 <button
                                   onClick={() => onExportToGoogleCalendar(p)}
                                   className="opacity-0 group-hover:opacity-100 transition-opacity ml-2"
