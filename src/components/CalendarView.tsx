@@ -25,6 +25,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ planning, onExportTo
   const [currentDate, setCurrentDate] = useState(new Date());
   const [googleEvents, setGoogleEvents] = useState<GoogleCalendarEvent[]>([]);
   const [isLoadingGoogleEvents, setIsLoadingGoogleEvents] = useState(false);
+  const [googleCalendarError, setGoogleCalendarError] = useState<string | null>(null);
 
   const getWeekDates = (date: Date) => {
     const start = new Date(date);
@@ -47,9 +48,13 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ planning, onExportTo
 
   const fetchGoogleCalendarEvents = async () => {
     setIsLoadingGoogleEvents(true);
+    setGoogleCalendarError(null);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
+      if (!session) {
+        setGoogleCalendarError('Session non trouvée');
+        return;
+      }
 
       const weekStart = weekDates[0];
       const weekEnd = new Date(weekDates[6]);
@@ -65,11 +70,18 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ planning, onExportTo
         }
       );
 
-      if (response.ok) {
-        const data = await response.json();
+      const data = await response.json();
+
+      if (response.ok && data.success) {
         setGoogleEvents(data.events || []);
+        console.log('Événements Google Calendar chargés:', data.events?.length || 0);
+      } else {
+        setGoogleCalendarError(data.error || 'Erreur lors du chargement');
+        console.error('Erreur Google Calendar:', data.error);
       }
-    } catch (error) {
+    } catch (error: any) {
+      const errorMsg = error.message || 'Erreur de connexion';
+      setGoogleCalendarError(errorMsg);
       console.error('Erreur chargement événements Google:', error);
     } finally {
       setIsLoadingGoogleEvents(false);
@@ -158,6 +170,28 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ planning, onExportTo
           <ChevronRight className="h-5 w-5" />
         </button>
       </div>
+
+      {googleCalendarError && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <div className="flex items-start">
+            <div className="flex-1">
+              <h3 className="text-sm font-medium text-yellow-800">Google Calendar non connecté</h3>
+              <p className="mt-1 text-sm text-yellow-700">{googleCalendarError}</p>
+              <p className="mt-2 text-sm text-yellow-600">
+                Allez dans Paramètres pour connecter votre compte Google Calendar
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!googleCalendarError && googleEvents.length > 0 && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+          <p className="text-sm text-green-800">
+            {googleEvents.length} événement(s) Google Calendar chargé(s)
+          </p>
+        </div>
+      )}
 
       <div className="bg-white rounded-lg shadow overflow-hidden">
         <div className="grid grid-cols-8 border-b border-gray-200">
