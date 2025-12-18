@@ -74,6 +74,10 @@ export const Administration: React.FC = () => {
     mot_de_passe: ''
   });
 
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [selectedUserForPassword, setSelectedUserForPassword] = useState<Utilisateur | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+
   useEffect(() => {
     loadEcoles();
     loadSalaries();
@@ -395,8 +399,10 @@ export const Administration: React.FC = () => {
     }
   };
 
-  const handleResetPassword = async (email: string) => {
-    if (!confirm(`Envoyer un email de réinitialisation à ${email} ?`)) return;
+  const handleUpdatePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!selectedUserForPassword) return;
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -404,7 +410,7 @@ export const Administration: React.FC = () => {
         throw new Error('Session non disponible');
       }
 
-      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/reset-password`;
+      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/update-password`;
 
       const response = await fetch(apiUrl, {
         method: 'POST',
@@ -412,16 +418,22 @@ export const Administration: React.FC = () => {
           'Authorization': `Bearer ${session.access_token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email })
+        body: JSON.stringify({
+          userId: selectedUserForPassword.id,
+          newPassword: newPassword
+        })
       });
 
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.error || 'Erreur lors de l\'envoi de l\'email');
+        throw new Error(result.error || 'Erreur lors de la mise à jour du mot de passe');
       }
 
-      alert('Email de réinitialisation envoyé avec succès!');
+      alert('Mot de passe modifié avec succès!');
+      setShowPasswordModal(false);
+      setSelectedUserForPassword(null);
+      setNewPassword('');
     } catch (error: any) {
       console.error('Erreur:', error);
       alert(error.message || 'Une erreur est survenue');
@@ -809,9 +821,13 @@ export const Administration: React.FC = () => {
                           <Pencil className="h-5 w-5" />
                         </button>
                         <button
-                          onClick={() => handleResetPassword(utilisateur.email)}
+                          onClick={() => {
+                            setSelectedUserForPassword(utilisateur);
+                            setShowPasswordModal(true);
+                            setNewPassword('');
+                          }}
                           className="text-orange-600 hover:text-orange-800"
-                          title="Réinitialiser le mot de passe"
+                          title="Changer le mot de passe"
                         >
                           <KeyRound className="h-5 w-5" />
                         </button>
@@ -987,6 +1003,55 @@ export const Administration: React.FC = () => {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {showPasswordModal && selectedUserForPassword && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
+            <h2 className="text-xl font-semibold mb-4">
+              Changer le mot de passe
+            </h2>
+            <p className="text-gray-600 mb-4">
+              Utilisateur : <span className="font-medium">{selectedUserForPassword.prenom} {selectedUserForPassword.nom}</span>
+            </p>
+            <form onSubmit={handleUpdatePassword} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Nouveau mot de passe
+                </label>
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  required
+                  minLength={6}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  placeholder="Minimum 6 caractères"
+                  autoFocus
+                />
+              </div>
+              <div className="flex justify-end space-x-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowPasswordModal(false);
+                    setSelectedUserForPassword(null);
+                    setNewPassword('');
+                  }}
+                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                >
+                  Changer le mot de passe
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
