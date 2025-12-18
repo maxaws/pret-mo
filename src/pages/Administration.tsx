@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { Building2, Users, Plus, Pencil, Trash2 } from 'lucide-react';
+import { Building2, Users, Plus, Pencil, Trash2, KeyRound, Shield } from 'lucide-react';
 
 interface Ecole {
   id: string;
@@ -24,16 +24,30 @@ interface Salarie {
   ecoles?: { nom: string } | null;
 }
 
+interface Utilisateur {
+  id: string;
+  email: string;
+  nom: string;
+  prenom: string;
+  role: 'accueil' | 'preteuse' | 'salarie';
+  ecole_id: string | null;
+  created_at: string;
+  ecoles?: { nom: string } | null;
+}
+
 export const Administration: React.FC = () => {
   const { profile } = useAuth();
-  const [activeTab, setActiveTab] = useState<'ecoles' | 'salaries'>('ecoles');
+  const [activeTab, setActiveTab] = useState<'ecoles' | 'salaries' | 'utilisateurs'>('ecoles');
   const [ecoles, setEcoles] = useState<Ecole[]>([]);
   const [salaries, setSalaries] = useState<Salarie[]>([]);
+  const [utilisateurs, setUtilisateurs] = useState<Utilisateur[]>([]);
   const [loading, setLoading] = useState(true);
   const [showEcoleForm, setShowEcoleForm] = useState(false);
   const [showSalarieForm, setShowSalarieForm] = useState(false);
+  const [showUtilisateurForm, setShowUtilisateurForm] = useState(false);
   const [editingEcole, setEditingEcole] = useState<Ecole | null>(null);
   const [editingSalarie, setEditingSalarie] = useState<Salarie | null>(null);
+  const [editingUtilisateur, setEditingUtilisateur] = useState<Utilisateur | null>(null);
 
   const [ecoleForm, setEcoleForm] = useState({
     nom: '',
@@ -51,9 +65,19 @@ export const Administration: React.FC = () => {
     mot_de_passe: ''
   });
 
+  const [utilisateurForm, setUtilisateurForm] = useState({
+    email: '',
+    nom: '',
+    prenom: '',
+    role: 'salarie' as 'accueil' | 'preteuse' | 'salarie',
+    ecole_id: '',
+    mot_de_passe: ''
+  });
+
   useEffect(() => {
     loadEcoles();
     loadSalaries();
+    loadUtilisateurs();
   }, []);
 
   const loadEcoles = async () => {
@@ -83,6 +107,23 @@ export const Administration: React.FC = () => {
         .order('nom');
       if (error) throw error;
       setSalaries(data || []);
+    } catch (error) {
+      console.error('Erreur:', error);
+    }
+  };
+
+  const loadUtilisateurs = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select(`
+          *,
+          ecoles(nom)
+        `)
+        .order('role', { ascending: true })
+        .order('nom');
+      if (error) throw error;
+      setUtilisateurs(data || []);
     } catch (error) {
       console.error('Erreur:', error);
     }
@@ -250,10 +291,147 @@ export const Administration: React.FC = () => {
     }
   };
 
-  if (profile?.role !== 'preteuse') {
+  const handleSaveUtilisateur = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    try {
+      if (editingUtilisateur) {
+        const { error } = await supabase
+          .from('profiles')
+          .update({
+            nom: utilisateurForm.nom,
+            prenom: utilisateurForm.prenom,
+            role: utilisateurForm.role,
+            ecole_id: utilisateurForm.ecole_id || null
+          })
+          .eq('id', editingUtilisateur.id);
+        if (error) throw error;
+        alert('Utilisateur modifié avec succès!');
+      } else {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          throw new Error('Session non disponible');
+        }
+
+        const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-user`;
+
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            email: utilisateurForm.email,
+            password: utilisateurForm.mot_de_passe,
+            nom: utilisateurForm.nom,
+            prenom: utilisateurForm.prenom,
+            role: utilisateurForm.role,
+            ecole_id: utilisateurForm.ecole_id || null
+          })
+        });
+
+        const result = await response.json();
+
+        if (!response.ok || !result.success) {
+          throw new Error(result.error || 'Erreur lors de la création');
+        }
+
+        alert('Utilisateur créé avec succès!');
+      }
+
+      setShowUtilisateurForm(false);
+      setEditingUtilisateur(null);
+      setUtilisateurForm({
+        email: '',
+        nom: '',
+        prenom: '',
+        role: 'salarie',
+        ecole_id: '',
+        mot_de_passe: ''
+      });
+
+      setTimeout(() => {
+        loadUtilisateurs();
+        loadSalaries();
+      }, 1000);
+    } catch (error: any) {
+      console.error('Erreur complète:', error);
+      alert(error.message || 'Une erreur est survenue');
+    }
+  };
+
+  const handleEditUtilisateur = (utilisateur: Utilisateur) => {
+    setEditingUtilisateur(utilisateur);
+    setUtilisateurForm({
+      email: utilisateur.email,
+      nom: utilisateur.nom,
+      prenom: utilisateur.prenom,
+      role: utilisateur.role,
+      ecole_id: utilisateur.ecole_id || '',
+      mot_de_passe: ''
+    });
+    setShowUtilisateurForm(true);
+  };
+
+  const handleDeleteUtilisateur = async (id: string) => {
+    if (!confirm('Êtes-vous sûr de vouloir supprimer cet utilisateur ?')) return;
+
+    try {
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .delete()
+        .eq('id', id);
+      if (profileError) throw profileError;
+
+      const { error: authError } = await supabase.auth.admin.deleteUser(id);
+      if (authError) console.warn('Erreur suppression auth:', authError);
+
+      loadUtilisateurs();
+      loadSalaries();
+    } catch (error) {
+      console.error('Erreur:', error);
+      alert('Impossible de supprimer cet utilisateur.');
+    }
+  };
+
+  const handleResetPassword = async (email: string) => {
+    if (!confirm(`Envoyer un email de réinitialisation à ${email} ?`)) return;
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('Session non disponible');
+      }
+
+      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/reset-password`;
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email })
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Erreur lors de l\'envoi de l\'email');
+      }
+
+      alert('Email de réinitialisation envoyé avec succès!');
+    } catch (error: any) {
+      console.error('Erreur:', error);
+      alert(error.message || 'Une erreur est survenue');
+    }
+  };
+
+  if (profile?.role !== 'preteuse' && profile?.role !== 'accueil') {
     return (
       <div className="flex items-center justify-center h-64">
-        <p className="text-gray-500">Accès réservé aux prêteuses</p>
+        <p className="text-gray-500">Accès réservé aux administrateurs</p>
       </div>
     );
   }
@@ -284,6 +462,17 @@ export const Administration: React.FC = () => {
           >
             <Building2 className="inline-block h-5 w-5 mr-2" />
             Écoles bénéficiaires
+          </button>
+          <button
+            onClick={() => setActiveTab('utilisateurs')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'utilisateurs'
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            <Shield className="inline-block h-5 w-5 mr-2" />
+            Tous les utilisateurs
           </button>
           <button
             onClick={() => setActiveTab('salaries')}
@@ -436,6 +625,198 @@ export const Administration: React.FC = () => {
                         </button>
                         <button
                           onClick={() => handleDeleteEcole(ecole.id)}
+                          className="text-red-600 hover:text-red-800"
+                          title="Supprimer"
+                        >
+                          <Trash2 className="h-5 w-5" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'utilisateurs' && (
+        <div className="space-y-6">
+          <div className="flex justify-end">
+            <button
+              onClick={() => {
+                setEditingUtilisateur(null);
+                setUtilisateurForm({
+                  email: '',
+                  nom: '',
+                  prenom: '',
+                  role: 'salarie',
+                  ecole_id: '',
+                  mot_de_passe: ''
+                });
+                setShowUtilisateurForm(!showUtilisateurForm);
+              }}
+              className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <Plus className="h-5 w-5 mr-2" />
+              Nouvel utilisateur
+            </button>
+          </div>
+
+          {showUtilisateurForm && (
+            <div className="bg-white rounded-lg shadow p-6">
+              <h2 className="text-xl font-semibold mb-4">
+                {editingUtilisateur ? 'Modifier l\'utilisateur' : 'Nouvel utilisateur'}
+              </h2>
+              <form onSubmit={handleSaveUtilisateur} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                    <input
+                      type="email"
+                      value={utilisateurForm.email}
+                      onChange={(e) => setUtilisateurForm({ ...utilisateurForm, email: e.target.value })}
+                      required
+                      disabled={!!editingUtilisateur}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                    />
+                  </div>
+                  {!editingUtilisateur && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Mot de passe</label>
+                      <input
+                        type="password"
+                        value={utilisateurForm.mot_de_passe}
+                        onChange={(e) => setUtilisateurForm({ ...utilisateurForm, mot_de_passe: e.target.value })}
+                        required
+                        minLength={6}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  )}
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Nom</label>
+                    <input
+                      type="text"
+                      value={utilisateurForm.nom}
+                      onChange={(e) => setUtilisateurForm({ ...utilisateurForm, nom: e.target.value })}
+                      required
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Prénom</label>
+                    <input
+                      type="text"
+                      value={utilisateurForm.prenom}
+                      onChange={(e) => setUtilisateurForm({ ...utilisateurForm, prenom: e.target.value })}
+                      required
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Rôle</label>
+                    <select
+                      value={utilisateurForm.role}
+                      onChange={(e) => setUtilisateurForm({ ...utilisateurForm, role: e.target.value as 'accueil' | 'preteuse' | 'salarie' })}
+                      required
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="salarie">Salarié</option>
+                      <option value="preteuse">Prêteuse</option>
+                      <option value="accueil">Accueil</option>
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">École prêteuse (optionnel)</label>
+                  <select
+                    value={utilisateurForm.ecole_id}
+                    onChange={(e) => setUtilisateurForm({ ...utilisateurForm, ecole_id: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Aucune école</option>
+                    {ecoles.map(e => (
+                      <option key={e.id} value={e.id}>{e.nom}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex justify-end space-x-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowUtilisateurForm(false);
+                      setEditingUtilisateur(null);
+                    }}
+                    className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  >
+                    {editingUtilisateur ? 'Modifier' : 'Créer'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          <div className="bg-white rounded-lg shadow overflow-hidden">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nom</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Rôle</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">École</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {utilisateurs.map((utilisateur) => (
+                  <tr key={utilisateur.id}>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                      {utilisateur.prenom} {utilisateur.nom}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {utilisateur.email}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                        utilisateur.role === 'accueil'
+                          ? 'bg-purple-100 text-purple-800'
+                          : utilisateur.role === 'preteuse'
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-blue-100 text-blue-800'
+                      }`}>
+                        {utilisateur.role === 'accueil' ? 'Accueil' : utilisateur.role === 'preteuse' ? 'Prêteuse' : 'Salarié'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {utilisateur.ecoles?.nom || '-'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => handleEditUtilisateur(utilisateur)}
+                          className="text-blue-600 hover:text-blue-800"
+                          title="Modifier"
+                        >
+                          <Pencil className="h-5 w-5" />
+                        </button>
+                        <button
+                          onClick={() => handleResetPassword(utilisateur.email)}
+                          className="text-orange-600 hover:text-orange-800"
+                          title="Réinitialiser le mot de passe"
+                        >
+                          <KeyRound className="h-5 w-5" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteUtilisateur(utilisateur.id)}
                           className="text-red-600 hover:text-red-800"
                           title="Supprimer"
                         >

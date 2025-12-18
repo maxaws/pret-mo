@@ -49,14 +49,19 @@ Deno.serve(async (req: Request) => {
       .eq('id', currentUser.id)
       .single();
 
-    if (profile?.role !== 'preteuse') {
-      throw new Error('Accès refusé: rôle prêteuse requis');
+    if (profile?.role !== 'preteuse' && profile?.role !== 'accueil') {
+      throw new Error('Accès refusé: rôle administrateur requis');
     }
 
-    const { email, password, nom, prenom, ecole_id } = await req.json();
+    const { email, password, nom, prenom, role, ecole_id } = await req.json();
 
     if (!email || !password || !nom || !prenom) {
       throw new Error('Email, mot de passe, nom et prénom sont requis');
+    }
+
+    const userRole = role || 'salarie';
+    if (!['accueil', 'preteuse', 'salarie'].includes(userRole)) {
+      throw new Error('Rôle invalide');
     }
 
     console.log('Création utilisateur avec email:', email);
@@ -75,7 +80,7 @@ Deno.serve(async (req: Request) => {
       user_metadata: {
         nom,
         prenom,
-        role: 'salarie'
+        role: userRole
       }
     });
 
@@ -98,7 +103,7 @@ Deno.serve(async (req: Request) => {
         email: email,
         nom,
         prenom,
-        role: 'salarie',
+        role: userRole,
         ecole_id: ecole_id || null
       });
 
