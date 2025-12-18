@@ -16,13 +16,14 @@ export const Planning: React.FC = () => {
     heure_fin: ''
   });
   const [salaries, setSalaries] = useState<any[]>([]);
+  const [selectedSalarieId, setSelectedSalarieId] = useState<string>('');
 
   useEffect(() => {
     loadPlanning();
     if (profile?.role === 'accueil' || profile?.role === 'preteuse') {
       loadSalaries();
     }
-  }, [profile]);
+  }, [profile, selectedSalarieId]);
 
   const loadSalaries = async () => {
     const { data } = await supabase
@@ -45,6 +46,8 @@ export const Planning: React.FC = () => {
 
       if (profile?.role === 'salarie') {
         query = query.eq('salarie_id', profile.id);
+      } else if (selectedSalarieId && (profile?.role === 'accueil' || profile?.role === 'preteuse')) {
+        query = query.eq('salarie_id', selectedSalarieId);
       }
 
       const { data, error } = await query;
@@ -251,6 +254,24 @@ export const Planning: React.FC = () => {
         </div>
       </div>
 
+      {(profile?.role === 'accueil' || profile?.role === 'preteuse') && (
+        <div className="bg-white rounded-lg shadow p-4">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Voir le planning d'un salarié
+          </label>
+          <select
+            value={selectedSalarieId}
+            onChange={(e) => setSelectedSalarieId(e.target.value)}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">Tous les salariés (vue tableau)</option>
+            {salaries.map(s => (
+              <option key={s.id} value={s.id}>{s.prenom} {s.nom}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
       {showForm && (profile?.role === 'accueil' || profile?.role === 'preteuse') && (
         <div className="bg-white rounded-lg shadow p-6">
           <h2 className="text-xl font-semibold mb-4">Nouveau planning</h2>
@@ -320,7 +341,7 @@ export const Planning: React.FC = () => {
         </div>
       )}
 
-      {profile?.role === 'salarie' ? (
+      {(profile?.role === 'salarie' || selectedSalarieId) ? (
         <CalendarView
           planning={planning}
           onExportToGoogleCalendar={exportToGoogleCalendar}
